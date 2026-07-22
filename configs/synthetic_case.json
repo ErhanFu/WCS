@@ -1,0 +1,98 @@
+{
+  "seed": 42,
+  "segments": ["peak", "flat", "valley"],
+  "segment_hours": {"peak": 8, "flat": 8, "valley": 8},
+  "reservoirs": [
+    {
+      "id": "res_01",
+      "min_storage_m3": 2000000.0,
+      "max_storage_m3": 8000000.0,
+      "initial_storage_m3": 5200000.0,
+      "level_storage_nodes": [[90.0, 2000000.0], [100.0, 5000000.0], [110.0, 8000000.0]]
+    },
+    {
+      "id": "res_02",
+      "min_storage_m3": 1500000.0,
+      "max_storage_m3": 6000000.0,
+      "initial_storage_m3": 3900000.0,
+      "level_storage_nodes": [[70.0, 1500000.0], [80.0, 3750000.0], [90.0, 6000000.0]]
+    },
+    {
+      "id": "ps_upper_01",
+      "min_storage_m3": 500000.0,
+      "max_storage_m3": 2500000.0,
+      "initial_storage_m3": 1500000.0,
+      "level_storage_nodes": [[400.0, 500000.0], [410.0, 1500000.0], [420.0, 2500000.0]]
+    },
+    {
+      "id": "ps_lower_01",
+      "min_storage_m3": 700000.0,
+      "max_storage_m3": 3000000.0,
+      "initial_storage_m3": 1800000.0,
+      "level_storage_nodes": [[120.0, 700000.0], [130.0, 1850000.0], [140.0, 3000000.0]]
+    }
+  ],
+  "ch_plants": [
+    {
+      "id": "ch_01",
+      "reservoir_id": "res_01",
+      "downstream_reservoir_id": "res_02",
+      "max_power_mw": 240.0,
+      "efficiency": 0.88,
+      "effective_head_m": 75.0,
+      "minimum_release_m3s": 4.0
+    },
+    {
+      "id": "ch_02",
+      "reservoir_id": "res_02",
+      "downstream_reservoir_id": null,
+      "max_power_mw": 160.0,
+      "efficiency": 0.87,
+      "effective_head_m": 55.0,
+      "minimum_release_m3s": 3.0
+    }
+  ],
+  "ps_plants": [
+    {
+      "id": "ps_01",
+      "upper_reservoir_id": "ps_upper_01",
+      "lower_reservoir_id": "ps_lower_01",
+      "max_generation_mw": 180.0,
+      "max_pumping_mw": 170.0,
+      "generation_efficiency": 0.87,
+      "pumping_efficiency": 0.82,
+      "effective_head_m": 280.0
+    }
+  ],
+  "anb": {
+    "weight_steepness": 8.0,
+    "neutral_storage": 0.70,
+    "storage_curvature": 6.0,
+    "water_value_correction": 0.10,
+    "short_term_strength": 10.0,
+    "asymmetry": 0.50,
+    "weight_min": 0.05,
+    "weight_max": 0.95
+  },
+  "water_value": {
+    "shortage_weight": 1.0,
+    "surplus_weight": 0.7,
+    "baseline_rate": 0.02,
+    "smoothing_rate": 0.20,
+    "noise_threshold": 0.01,
+    "signal_gain": 2.0,
+    "lower_bound": -1.0,
+    "upper_bound": 1.0
+  },
+  "training": {
+    "learning_rate": 0.0003,
+    "buffer_size": 100000,
+    "batch_size": 256,
+    "gamma": 0.995,
+    "tau": 0.02,
+    "long_steps": 2000,
+    "short_steps": 2000
+  },
+  "rolling_horizon": 6,
+  "candidate_count": 6
+}

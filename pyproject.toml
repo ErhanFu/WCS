@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chps-scheduler"
+version = "0.1.0"
+description = "Privacy-safe two-layer cascade-hydropower and pumped-storage scheduling framework"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.24",
+  "pandas>=2.0",
+  "scipy>=1.10",
+]
+
+[project.optional-dependencies]
+rl = ["gymnasium>=0.29", "stable-baselines3>=2.3", "torch>=2.1"]
+dev = ["pytest>=8.0", "ruff>=0.5"]
+
+[project.scripts]
+chps-scheduler = "chps_scheduler.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

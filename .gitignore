@@ -1,0 +1,55 @@
+# Private inputs and local overrides
+data/private/
+data/raw/
+data/processed/
+configs/private*.json
+*.local.json
+.env
+.env.*
+!.env.example
+private/
+secrets/
+credentials*
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Private tabular and document inputs
+*.csv
+*.tsv
+*.xls
+*.xlsx
+*.parquet
+*.feather
+
+# Models, normalization statistics, and experiment output
+models/
+runs/
+outputs/
+tensorboard/
+logs/
+*.pkl
+*.pt
+*.pth
+*.zip
+
+# Python and editor state
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+.coverage
+htmlcov/
+.idea/
+.vscode/
+
+# OS metadata
+.DS_Store
+Thumbs.db
+desktop.ini
