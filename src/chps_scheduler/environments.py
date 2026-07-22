@@ -8,6 +8,7 @@ from typing import Any
 import numpy as np
 
 from .config import SchedulerConfig
+from .curves import LevelStorageCurve
 from .data import CaseData
 from .gym_compat import gym, spaces
 from .models import HydraulicState, InterLayerPlan
@@ -229,6 +230,10 @@ class ShortTermEnv(gym.Env):
         self.physics = HydraulicModel(config)
         self.anb = ANBCoordinator(config.anb)
         self.water_model = WaterValueModel(config.water_value)
+        self.level_storage_curves = {
+            reservoir.id: LevelStorageCurve.from_nodes(reservoir.level_storage_nodes)
+            for reservoir in config.reservoirs
+        }
         self.initial_hydraulic_state = initial_state or self.physics.initial_state()
         self.action_space = spaces.Box(0.0, 1.0, shape=(config.short_action_size,), dtype=np.float32)
         quota_terms = len(config.ch_plants) + 2 * len(config.ps_plants)
@@ -462,6 +467,15 @@ class ShortTermEnv(gym.Env):
                     item.max_storage_m3 - item.min_storage_m3
                     for item in self.config.reservoirs
                     if item.id == plant.upper_reservoir_id
+                )
+                for plant in self.config.ps_plants
+            },
+            "upper_level_margins_m": {
+                plant.id: (
+                    self.level_storage_curves[plant.upper_reservoir_id].levels_m[-1]
+                    - self.level_storage_curves[plant.upper_reservoir_id].level(
+                        self.state.storage_m3[plant.upper_reservoir_id]
+                    )
                 )
                 for plant in self.config.ps_plants
             },

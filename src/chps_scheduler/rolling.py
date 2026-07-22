@@ -70,7 +70,6 @@ class RollingHorizonEvaluator:
                 for ps_index in range(len(self.config.ps_plants)):
                     gen = ch_count + 2 * ps_index
                     pump = gen + 1
-                    shortage[index, gen] = np.clip(shortage[index, gen] + 0.10, 0.0, 1.0)
                     shortage[index, pump] *= 0.50
         variants.append(shortage)
 
@@ -95,14 +94,14 @@ class RollingHorizonEvaluator:
             for ps_index, plant in enumerate(self.config.ps_plants):
                 gen = ch_count + 2 * ps_index
                 pump = gen + 1
-                upper_factor = info["upper_storage_factors"][plant.id]
+                upper_margin_m = info["upper_level_margins_m"][plant.id]
                 spill = info["spill_m3"].get(plant.upper_reservoir_id, 0.0)
                 if spill > 0.0:
                     storage_safety[index, gen] = np.clip(
                         storage_safety[index, gen] + 0.30, 0.0, 1.0
                     )
                     storage_safety[index, pump] *= 0.30
-                elif upper_factor > 0.90:
+                elif upper_margin_m < 0.50:
                     storage_safety[index, gen] = np.clip(
                         storage_safety[index, gen] + 0.20, 0.0, 1.0
                     )
@@ -122,9 +121,11 @@ class RollingHorizonEvaluator:
                     state_response[index, gen] = np.clip(
                         state_response[index, gen] + 0.10, 0.0, 1.0
                     )
-                    if storage_factor > 0.80:
-                        state_response[index, pump] *= 0.60
-            elif (
+            if storage_factor > 0.80:
+                for ps_index in range(len(self.config.ps_plants)):
+                    pump = ch_count + 2 * ps_index + 1
+                    state_response[index, pump] *= 0.60
+            if (
                 info["segment"] == "peak"
                 and storage_factor < 0.30
                 and info["purchased_mwh"] < 0.30 * info["load_mwh"]
@@ -156,4 +157,3 @@ class RollingHorizonEvaluator:
         candidates = self._candidate_variants(baseline, infos)
         values = [self._evaluate(env, candidate) for candidate in candidates]
         return np.asarray(candidates[int(np.argmax(values))][0], dtype=float)
-
