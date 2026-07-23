@@ -41,8 +41,10 @@ timestamp,load_mwh,wind_mwh,solar_mwh,inflow_<reservoir_id>_m3s,...
 ```
 
 The hourly CSV uses the same schema at hourly resolution. Reservoir and unit IDs must
-match a private configuration derived from `configs/synthetic_case.json`. Engineering
-curves can be supplied as level-storage nodes and optional normalized P-H-Q terms.
+match a private configuration derived from `configs/synthetic_case.json`. The bundled
+synthetic example uses generic level-storage curves and hydraulic conversion
+parameters; station-specific operating records and engineering curves are not
+included.
 
 ## Important implementation correction
 
@@ -61,4 +63,3 @@ python scripts/privacy_scan.py .
 
 Also complete [PUBLICATION_CHECKLIST.md](PUBLICATION_CHECKLIST.md). The scanner is a
 guardrail, not a substitute for a human review of the Git history and release assets.
-
