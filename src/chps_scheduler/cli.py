@@ -65,8 +65,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "demo":
         coordinator = TwoLayerCoordinator(config, data)
-        plans = coordinator.build_plans()
-        dispatch = coordinator.dispatch(plans=plans, rolling=not args.no_rolling)
+        dispatch = coordinator.dispatch(rolling=not args.no_rolling)
         args.output.mkdir(parents=True, exist_ok=True)
         dispatch.to_csv(args.output / "dispatch.csv", index=False)
         summary = {
@@ -75,9 +74,7 @@ def main(argv: list[str] | None = None) -> int:
             "curtailed_mwh": float(dispatch["curtailed_mwh"].sum()),
             "maximum_balance_error_mwh": float(dispatch["balance_error_mwh"].abs().max()),
         }
-        (args.output / "summary.json").write_text(
-            json.dumps(summary, indent=2), encoding="utf-8"
-        )
+        (args.output / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
         print(json.dumps(summary, indent=2))
         return 0
     if args.command == "train":
@@ -89,4 +86,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

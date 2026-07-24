@@ -121,6 +121,16 @@ class LongTermEnv(gym.Env):
         self.plans = []
         return self._observation(), {}
 
+    def apply_realized_feedback(
+        self,
+        hydraulic_state: HydraulicState,
+        water_state: WaterValueState,
+    ) -> np.ndarray:
+        """Replace modeled states with the latest realized short-term states."""
+        self.state = hydraulic_state.copy()
+        self.water_state = copy.deepcopy(water_state)
+        return self._observation()
+
     def step(self, action: np.ndarray):
         row = self.data.daily.iloc[self.day]
         ch_quota, ps_generation, ps_pumping = self._decode_action(action)
@@ -178,9 +188,9 @@ class LongTermEnv(gym.Env):
             + self.lambdas["curtailment_share"] * signals["g_curtailment_share"]
             + self.lambdas["purchased_share"] * signals["g_purchased_share"]
         )
-        reward = -(
-            result.purchased_mwh + result.curtailed_mwh + 0.25 * target_error
-        ) / scale - penalty
+        reward = (
+            -(result.purchased_mwh + result.curtailed_mwh + 0.25 * target_error) / scale - penalty
+        )
         plan = InterLayerPlan(
             day_index=self.day,
             ch_quota_mwh=ch_quota,
@@ -206,7 +216,9 @@ class LongTermEnv(gym.Env):
         }
         self.day += 1
         terminated = self.day >= len(self.data.daily)
-        observation = np.zeros(self._obs_size, dtype=np.float32) if terminated else self._observation()
+        observation = (
+            np.zeros(self._obs_size, dtype=np.float32) if terminated else self._observation()
+        )
         return observation, float(reward), terminated, False, info
 
 
@@ -222,11 +234,14 @@ class ShortTermEnv(gym.Env):
     ):
         super().__init__()
         data.validate(config)
-        if len(plans) != len(data.daily):
-            raise ValueError("One inter-layer plan is required for every day")
+        if not plans:
+            raise ValueError("At least one inter-layer plan is required")
         self.config = config
         self.data = data
-        self.plans = plans
+        self.plans: list[InterLayerPlan] = []
+        self._plans_by_day: dict[int, InterLayerPlan] = {}
+        for plan in plans:
+            self.set_plan(plan)
         self.physics = HydraulicModel(config)
         self.anb = ANBCoordinator(config.anb)
         self.water_model = WaterValueModel(config.water_value)
@@ -235,7 +250,9 @@ class ShortTermEnv(gym.Env):
             for reservoir in config.reservoirs
         }
         self.initial_hydraulic_state = initial_state or self.physics.initial_state()
-        self.action_space = spaces.Box(0.0, 1.0, shape=(config.short_action_size,), dtype=np.float32)
+        self.action_space = spaces.Box(
+            0.0, 1.0, shape=(config.short_action_size,), dtype=np.float32
+        )
         quota_terms = len(config.ch_plants) + 2 * len(config.ps_plants)
         self._obs_size = len(config.reservoirs) + 3 + quota_terms + 4
         self.observation_space = spaces.Box(-2.0, 2.0, shape=(self._obs_size,), dtype=np.float32)
@@ -253,15 +270,25 @@ class ShortTermEnv(gym.Env):
         self.next_day = 0
         self.state = self.initial_hydraulic_state.copy()
         self.reset(seed=config.seed)
+        self.next_day = 0
 
     def _load_day(self, day_index: int) -> None:
         self.day_index = int(day_index)
         self.hour = 0
-        self.plan = self.plans[self.day_index]
+        try:
+            self.plan = self._plans_by_day[self.day_index]
+        except KeyError as exc:
+            raise ValueError(f"No inter-layer plan is available for day {self.day_index}") from exc
         self.water_state = WaterValueState(value=self.plan.water_value)
         self.remaining_ch = copy.deepcopy(self.plan.ch_quota_mwh)
         self.remaining_ps_generation = copy.deepcopy(self.plan.ps_generation_quota_mwh)
         self.remaining_ps_pumping = copy.deepcopy(self.plan.ps_pumping_quota_mwh)
+
+    def set_plan(self, plan: InterLayerPlan) -> None:
+        if not 0 <= plan.day_index < len(self.data.daily):
+            raise ValueError(f"Plan day index is outside the data range: {plan.day_index}")
+        self._plans_by_day[plan.day_index] = plan
+        self.plans = [self._plans_by_day[index] for index in sorted(self._plans_by_day)]
 
     def _row(self):
         return self.data.hourly.iloc[self.day_index * 24 + self.hour]
@@ -294,7 +321,12 @@ class ShortTermEnv(gym.Env):
             )
         phase = 2.0 * math.pi * self.hour / 24.0
         values = storage + [load / self.max_load, vre / self.max_vre, (load - vre) / self.max_load]
-        values += quota + [math.sin(phase), math.cos(phase), self.water_state.value, self.plan.storage_factor]
+        values += quota + [
+            math.sin(phase),
+            math.cos(phase),
+            self.water_state.value,
+            self.plan.storage_factor,
+        ]
         return np.asarray(values, dtype=np.float32)
 
     def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None):
@@ -304,9 +336,13 @@ class ShortTermEnv(gym.Env):
             self.state = options["hydraulic_state"].copy()
         elif options.get("reset_hydraulic_state", False):
             self.state = self.initial_hydraulic_state.copy()
-        day_index = int(options.get("day_index", self.next_day % len(self.plans)))
-        self.next_day = (day_index + 1) % len(self.plans)
+        available_days = sorted(self._plans_by_day)
+        default_day = available_days[self.next_day % len(available_days)]
+        day_index = int(options.get("day_index", default_day))
+        self.next_day += 1
         self._load_day(day_index)
+        if "water_state" in options:
+            self.water_state = copy.deepcopy(options["water_state"])
         return self._observation(), {"day_index": day_index}
 
     def snapshot(self) -> ShortSnapshot:
@@ -424,7 +460,9 @@ class ShortTermEnv(gym.Env):
         target_storage_error = sum(
             abs(self.state.storage_m3[key] - target)
             for key, target in self.plan.target_storage_m3.items()
-        ) / max(sum(item.max_storage_m3 - item.min_storage_m3 for item in self.config.reservoirs), 1.0)
+        ) / max(
+            sum(item.max_storage_m3 - item.min_storage_m3 for item in self.config.reservoirs), 1.0
+        )
         signals = {
             "g_segment_quota": quota_left / 1000.0 if is_terminal_hour else 0.0,
             "g_terminal_storage": target_storage_error if is_terminal_hour else 0.0,
@@ -435,9 +473,10 @@ class ShortTermEnv(gym.Env):
             "g_pumping_quota": pumping_left / 1000.0 if is_terminal_hour else 0.0,
         }
         penalty = sum(self.lambdas[name] * signals[f"g_{name}"] for name in self.lambdas)
-        reward = -(
-            result.purchased_mwh + result.curtailed_mwh + 0.25 * target_error
-        ) / max(load, 1.0) - penalty
+        reward = (
+            -(result.purchased_mwh + result.curtailed_mwh + 0.25 * target_error) / max(load, 1.0)
+            - penalty
+        )
         info = {
             **signals,
             "day_index": self.day_index,
@@ -483,5 +522,7 @@ class ShortTermEnv(gym.Env):
         }
         self.hour += 1
         terminated = self.hour >= 24
-        observation = np.zeros(self._obs_size, dtype=np.float32) if terminated else self._observation()
+        observation = (
+            np.zeros(self._obs_size, dtype=np.float32) if terminated else self._observation()
+        )
         return observation, float(reward), terminated, False, info

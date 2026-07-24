@@ -30,6 +30,9 @@ pytest
 
 The demo uses a deterministic policy and does not require training. SAC training is
 available through `chps-scheduler train` when the `rl` extra is installed.
+During the demo, the daily layer issues one inter-layer plan, the hourly layer executes
+that plan with rolling-horizon candidate evaluation, and the realized end-of-day
+hydraulic and water-value states are fed back before the next daily plan is generated.
 
 ## Private data interface
 
